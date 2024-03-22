@@ -74,7 +74,7 @@ func main() {
 		modules[0] = mod.Module.Mod.Path
 	}
 
-	for i, j := len(a)-1, 1; i > 0; i, j = i-1, j+1 {
+	for i, j := len(a)-1, 1; i >= 0; i, j = i-1, j+1 {
 		modules[j] = a[i]
 	}
 	modulePath := filepath.Join(modules...)

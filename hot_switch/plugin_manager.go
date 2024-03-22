@@ -101,7 +101,6 @@ func (pm *PluginManager) loadPlugin(info *fileInfo) error {
 	pg.Name = info.name
 	pg.File = info.file
 	pg.FileSha1 = info.fileSha1
-	pm.Log.Printf("plugin: %s\n", actual)
 	pg.p, err = plugin.Open(actual)
 	if err != nil {
 		return err

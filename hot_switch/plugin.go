@@ -46,15 +46,15 @@ func (pl *Plugin) Lookup(symName string, out any) error {
 
 	symVal := reflect.ValueOf(sym)
 	symType := symVal.Type()
-	ele := outVal.Elem()
-	eleType := ele.Type()
+	elem := outVal.Elem()
+	elemType := elem.Type()
 
 	switch {
-	case symType.AssignableTo(eleType):
-		ele.Set(symVal.Elem())
+	case symType.AssignableTo(elemType):
+		elem.Set(symVal)
 		return nil
-	case symType.Kind() == reflect.Ptr && symType.Elem().AssignableTo(eleType):
-		ele.Set(symVal.Elem())
+	case symType.Kind() == reflect.Ptr && symType.Elem().AssignableTo(elemType):
+		elem.Set(symVal.Elem())
 		return nil
 	default:
 		return fmt.Errorf("failed to assign %s to out. dy: %s, symType: %s, outType: %s",
