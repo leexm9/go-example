@@ -3,7 +3,9 @@ package repl
 import (
 	"bufio"
 	"fmt"
+	"go-example/monkey/evaluator"
 	"go-example/monkey/lexer"
+	"go-example/monkey/object"
 	"go-example/monkey/parser"
 	"go-example/monkey/token"
 	"io"
@@ -33,6 +35,37 @@ func startLexer(in io.Reader, out io.Writer) {
 
 		for tok := l.NextToken(); tok.Type != token.EOF; tok = l.NextToken() {
 			_, _ = fmt.Fprintf(out, "%+v\n", tok)
+		}
+	}
+}
+
+func startEvaluator(in io.Reader, out io.Writer) {
+	scanner := bufio.NewScanner(in)
+	env := object.NewEnvironment()
+
+	for {
+		_, _ = fmt.Fprintf(out, PROMT)
+		scanned := scanner.Scan()
+		if !scanned {
+			return
+		}
+		line := scanner.Text()
+		if line == "exit" {
+			return
+		}
+		l := lexer.New(line)
+		p := parser.New(l)
+
+		prog := p.ParseProgram()
+		if len(p.Errors()) != 0 {
+			printParserErrors(out, p.Errors())
+			continue
+		}
+
+		evaluated := evaluator.Eval(prog, env)
+		if evaluated != nil {
+			io.WriteString(out, evaluated.Inspect())
+			io.WriteString(out, "\n")
 		}
 	}
 }
