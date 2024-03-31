@@ -18,6 +18,7 @@ const (
 	ERROR_OBJ        = "error"
 	FUNCTION_OBJ     = "function"
 	STRING_OBJ       = "string"
+	BUILTIN_OBJ      = "builtin"
 )
 
 var (
@@ -94,3 +95,12 @@ func (fn *Function) Inspect() string {
 
 	return out.String()
 }
+
+type BuiltinFunction func(args ...Object) Object
+
+type Builtin struct {
+	Fn BuiltinFunction
+}
+
+func (b *Builtin) Type() ObjectType { return BUILTIN_OBJ }
+func (b *Builtin) Inspect() string  { return "builtin function" }
