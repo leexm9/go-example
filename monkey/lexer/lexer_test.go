@@ -56,6 +56,8 @@ func TestNextToken2(t *testing.T) {
 		
 		10 == 10;
 		10 != 9;
+		"foobar"
+		"foo bar"
 	`
 
 	tests := []struct {
@@ -144,6 +146,9 @@ func TestNextToken2(t *testing.T) {
 		{token.INT, "9"},
 		{token.SEMICOLON, ";"},
 
+		{token.STRING, "foobar"},
+		{token.STRING, "foo bar"},
+
 		{token.EOF, ""},
 	}
 
@@ -155,6 +160,29 @@ func TestNextToken2(t *testing.T) {
 		}
 		if tok.Literal != tt.expectedLiteral {
 			t.Fatalf("tests[%d] - literal wrong, expected=%q, got=%q", i, tt.expectedLiteral, tok.Literal)
+		}
+	}
+}
+
+func TestStringToken(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected string
+	}{
+		{`"hello world"`, "hello world"},
+		{`"hello\tworld"`, "hello	world"},
+		{`"hello\"world"`, `hello"world`},
+		{`""`, ""},
+	}
+
+	for i, tt := range tests {
+		l := New(tt.input)
+		tok := l.NextToken()
+		if tok.Type != token.STRING {
+			t.Fatalf("tests[%d] - tokentype wrong, expected=%q, got=%q", i, token.STRING, tok.Type)
+		}
+		if tok.Literal != tt.expected {
+			t.Fatalf("tests[%d] - literal wrong, expected=%q, got=%q", i, tt.expected, tok.Literal)
 		}
 	}
 }

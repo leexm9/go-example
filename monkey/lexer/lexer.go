@@ -1,6 +1,9 @@
 package lexer
 
-import "go-example/monkey/token"
+import (
+	"bytes"
+	"go-example/monkey/token"
+)
 
 type Lexer struct {
 	input        string
@@ -80,6 +83,9 @@ func (l *Lexer) NextToken() token.Token {
 		tok = newToken(token.LBRACE, l.ch)
 	case '}':
 		tok = newToken(token.RBRACE, l.ch)
+	case '"':
+		tok.Type = token.STRING
+		tok.Literal = l.readString()
 	case 0:
 		tok.Type = token.EOF
 		tok.Literal = ""
@@ -121,6 +127,37 @@ func (l *Lexer) skipWhitespace() {
 	for l.ch == ' ' || l.ch == '\t' || l.ch == '\n' || l.ch == '\r' {
 		l.readChar()
 	}
+}
+
+var escapeChMap = map[byte]byte{
+	't':  '\t',
+	'n':  '\n',
+	'"':  '"',
+	'\\': '\\',
+	'r':  '\r',
+}
+
+func (l *Lexer) readString() string {
+	var out bytes.Buffer
+	l.readChar()
+	for {
+		if l.ch == '\\' {
+			if v, ok := escapeChMap[l.peekChar()]; ok {
+				l.readChar()
+				l.readChar()
+				out.WriteByte(v)
+			} else {
+				break
+			}
+		} else if l.ch != '"' {
+			out.WriteByte(l.ch)
+			l.readChar()
+		}
+		if l.ch == '"' || l.ch == 0 {
+			break
+		}
+	}
+	return out.String()
 }
 
 func isLetter(ch byte) bool {

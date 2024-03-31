@@ -22,10 +22,11 @@ func TestObjectExpr(t *testing.T) {
 	}{
 		{"5", 5},
 		{"10", 10},
-		{"-5", -5},
-		{"-10", -10},
 		{"true", true},
 		{"false", false},
+		{`"hello world"`, "hello world"},
+		{"-5", -5},
+		{"-10", -10},
 		{"!true", false},
 		{"!false", true},
 		{"!5", false},
@@ -43,6 +44,7 @@ func TestObjectExpr(t *testing.T) {
 		{"3 * 3 * 3 + 10", 37},
 		{"3 * (3 * 3) + 10", 37},
 		{"(5 + 10 * 2 + 15 / 3) * 2 + -10", 50},
+		{`"hello" + " world"`, "hello world"},
 		{"1 < 2", true},
 		{"1 > 2", false},
 		{"1 < 1", false},
@@ -188,6 +190,10 @@ func TestErrorHandling(t *testing.T) {
 			"foobar",
 			"identifier not found: foobar",
 		},
+		{
+			`"hello" - "world"`,
+			"unknown operator: string - string",
+		},
 	}
 
 	for _, tt := range tests {
@@ -277,6 +283,8 @@ func testObject(t *testing.T, obj object.Object, expected any) bool {
 		return testIntegerObject(t, obj, int64(expected))
 	case bool:
 		return testBooleanObject(t, obj, expected)
+	case string:
+		return testStringObject(t, obj, expected)
 	default:
 		t.Errorf("object is not support. got=%T (%+v)", obj, obj)
 		return false
@@ -307,6 +315,20 @@ func testBooleanObject(t *testing.T, obj object.Object, expected bool) bool {
 		t.Errorf("object has wrong value. got=%t, want=%t", result.Value, expected)
 		return false
 	}
+	return true
+}
+
+func testStringObject(t *testing.T, obj object.Object, expected string) bool {
+	result, ok := obj.(*object.String)
+	if !ok {
+		t.Errorf("object is not String. got=%T (%+v)", obj, obj)
+		return false
+	}
+	if result.Value != expected {
+		t.Errorf("object has wrong value. got=%s, want=%s", result.Value, expected)
+		return false
+	}
+
 	return true
 }
 
