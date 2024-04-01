@@ -18,6 +18,7 @@ const (
 	ERROR_OBJ        = "error"
 	FUNCTION_OBJ     = "function"
 	STRING_OBJ       = "string"
+	ARRAY_OBJ        = "array"
 	BUILTIN_OBJ      = "builtin"
 )
 
@@ -71,6 +72,26 @@ type Error struct {
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }
 func (e *Error) Inspect() string  { return fmt.Sprintf("Message: ", e.Message) }
+
+type Array struct {
+	Elements []Object
+}
+
+func (a *Array) Type() ObjectType { return ARRAY_OBJ }
+func (a *Array) Inspect() string {
+	var out bytes.Buffer
+
+	var elems []string
+	for _, element := range a.Elements {
+		elems = append(elems, element.Inspect())
+	}
+
+	out.WriteString("[")
+	out.WriteString(strings.Join(elems, ", "))
+	out.WriteString("]")
+
+	return out.String()
+}
 
 type Function struct {
 	Parameters []*ast.Identifier
