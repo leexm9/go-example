@@ -1,6 +1,8 @@
 package object
 
-var Builtins = []struct {
+import "fmt"
+
+var builtins = []struct {
 	Name    string
 	Builtin *Builtin
 }{
@@ -30,7 +32,7 @@ var Builtins = []struct {
 					return NewError("wrong number of arguments. got=%d, want=2", len(args))
 				}
 				if args[0].Type() != ARRAY_OBJ {
-					return NewError("argument to `push` must be Array, got %s", args[0].Type())
+					return NewError("argument to `push` must be array, got %s", args[0].Type())
 				}
 				array := args[0].(*Array)
 				length := len(array.Elements)
@@ -42,13 +44,84 @@ var Builtins = []struct {
 			},
 		},
 	},
+	{
+		"first",
+		&Builtin{
+			Fn: func(args ...Object) Object {
+				if len(args) != 1 {
+					return NewError("wrong number of arguments. got=%d, want=1", len(args))
+				}
+				if args[0].Type() != ARRAY_OBJ {
+					return NewError("argument to `first` must be array, got %s", args[0].Type())
+				}
+
+				arr := args[0].(*Array)
+				if len(arr.Elements) > 0 {
+					return arr.Elements[0]
+				}
+				return NULL
+			},
+		},
+	},
+	{
+		"last",
+		&Builtin{
+			Fn: func(args ...Object) Object {
+				if len(args) != 1 {
+					return NewError("wrong number of arguments. got=%d, want=1", len(args))
+				}
+				if args[0].Type() != ARRAY_OBJ {
+					return NewError("argument to `last` must be array, got %s", args[0].Type())
+				}
+
+				arr := args[0].(*Array)
+				length := len(arr.Elements)
+				if length > 0 {
+					return arr.Elements[length-1]
+				}
+				return NULL
+			},
+		},
+	},
+	{
+		"rest",
+		&Builtin{
+			Fn: func(args ...Object) Object {
+				if len(args) != 1 {
+					return NewError("wrong number of arguments. got=%d, want=1", len(args))
+				}
+				if args[0].Type() != ARRAY_OBJ {
+					return NewError("argument to `rest` must be array, got %s", args[0].Type())
+				}
+
+				arr := args[0].(*Array)
+				length := len(arr.Elements)
+				if length > 0 {
+					newElements := make([]Object, length-1, length-1)
+					copy(newElements, arr.Elements[1:length])
+					return &Array{Elements: newElements}
+				}
+				return NULL
+			},
+		},
+	},
+	{
+		"print",
+		&Builtin{
+			Fn: func(args ...Object) Object {
+				for _, arg := range args {
+					fmt.Println(arg.Inspect())
+				}
+				return NULL
+			},
+		},
+	},
 }
 
-func GetBuiltingByName(name string) *Builtin {
-	for _, item := range Builtins {
-		if item.Name == name {
-			return item.Builtin
-		}
+var BuiltinsMap = make(map[string]*Builtin)
+
+func init() {
+	for _, item := range builtins {
+		BuiltinsMap[item.Name] = item.Builtin
 	}
-	return nil
 }

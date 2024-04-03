@@ -211,7 +211,10 @@ func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object
 	if ok {
 		return val
 	}
-	builtin := object.GetBuiltingByName(node.Value)
+	builtin, ok := object.BuiltinsMap[node.Value]
+	if ok {
+		return builtin
+	}
 	if builtin != nil {
 		return builtin
 	}
