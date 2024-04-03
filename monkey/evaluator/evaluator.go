@@ -75,6 +75,8 @@ func Eval(node ast.Node, env *object.Environment) object.Object {
 			return elems[0]
 		}
 		return &object.Array{Elements: elems}
+	case *ast.HashLiteral:
+		return evalHashLiteral(node, env)
 	case *ast.IntegerLiteral:
 		return &object.Integer{Value: node.Value}
 	case *ast.Boolean:
@@ -171,12 +173,14 @@ func evalIndexExpression(left object.Object, index object.Object) object.Object 
 	switch {
 	case left.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
 		return evalArrayIndexExpression(left, index)
+	case left.Type() == object.HASH_OBJ:
+		return evalHashIndexExpression(left, index)
 	default:
 		return object.NewError("index operator not supported: %s", left.Type())
 	}
 }
 
-func evalArrayIndexExpression(array object.Object, index object.Object) object.Object {
+func evalArrayIndexExpression(array, index object.Object) object.Object {
 	arrayObj := array.(*object.Array)
 	idx := index.(*object.Integer).Value
 	num := len(arrayObj.Elements) - 1
@@ -184,6 +188,22 @@ func evalArrayIndexExpression(array object.Object, index object.Object) object.O
 		return object.NULL
 	}
 	return arrayObj.Elements[idx]
+}
+
+func evalHashIndexExpression(hash, index object.Object) object.Object {
+	hashObj := hash.(*object.Hash)
+
+	key, ok := index.(object.Hashable)
+	if !ok {
+		return object.NewError("unusable as hash key: %s", index.Type())
+	}
+
+	pair, ok := hashObj.Pairs[key.HashKey()]
+	if !ok {
+		return object.NULL
+	}
+
+	return pair.Value
 }
 
 func evalIdentifier(node *ast.Identifier, env *object.Environment) object.Object {
@@ -269,6 +289,30 @@ func evalStringInfixExpression(operator string, left object.Object, right object
 	default:
 		return object.NewError("unknown operator: %s %s %s", left.Type(), operator, right.Type())
 	}
+}
+
+func evalHashLiteral(node *ast.HashLiteral, env *object.Environment) object.Object {
+	pairs := make(map[object.HashKey]object.HashPair)
+
+	for keyNode, valNode := range node.Pairs {
+		key := Eval(keyNode, env)
+		if object.IsError(key) {
+			return key
+		}
+		hashKey, ok := key.(object.Hashable)
+		if !ok {
+			return object.NewError("unusable as hash key: %s", key.Type())
+		}
+
+		value := Eval(valNode, env)
+		if object.IsError(value) {
+			return value
+		}
+		hashed := hashKey.HashKey()
+		pairs[hashed] = object.HashPair{Key: key, Value: value}
+	}
+
+	return &object.Hash{Pairs: pairs}
 }
 
 func applyFunction(fn object.Object, args []object.Object) object.Object {

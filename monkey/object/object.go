@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go-example/monkey/ast"
+	"hash/fnv"
 	"strconv"
 	"strings"
 )
@@ -19,6 +20,7 @@ const (
 	FUNCTION_OBJ     = "function"
 	STRING_OBJ       = "string"
 	ARRAY_OBJ        = "array"
+	HASH_OBJ         = "hash"
 	BUILTIN_OBJ      = "builtin"
 )
 
@@ -33,12 +35,24 @@ type Object interface {
 	Inspect() string
 }
 
+type HashKey struct {
+	Type  ObjectType
+	Value uint64
+}
+
+type Hashable interface {
+	HashKey() HashKey
+}
+
 type Integer struct {
 	Value int64
 }
 
-func (i Integer) Type() ObjectType { return INTEGER_OBJ }
-func (i *Integer) Inspect() string { return strconv.FormatInt(i.Value, 10) }
+func (i *Integer) Type() ObjectType { return INTEGER_OBJ }
+func (i *Integer) Inspect() string  { return strconv.FormatInt(i.Value, 10) }
+func (i *Integer) HashKey() HashKey {
+	return HashKey{Type: i.Type(), Value: uint64(i.Value)}
+}
 
 type Boolean struct {
 	Value bool
@@ -46,6 +60,13 @@ type Boolean struct {
 
 func (b *Boolean) Type() ObjectType { return BOOLEAN_OBJ }
 func (b *Boolean) Inspect() string  { return strconv.FormatBool(b.Value) }
+func (b *Boolean) HashKey() HashKey {
+	if b.Value {
+		return HashKey{Type: b.Type(), Value: 1}
+	} else {
+		return HashKey{Type: b.Type(), Value: 0}
+	}
+}
 
 type Null struct{}
 
@@ -56,8 +77,13 @@ type String struct {
 	Value string
 }
 
-func (s String) Type() ObjectType { return STRING_OBJ }
-func (s String) Inspect() string  { return s.Value }
+func (s *String) Type() ObjectType { return STRING_OBJ }
+func (s *String) Inspect() string  { return s.Value }
+func (s *String) HashKey() HashKey {
+	h := fnv.New64a()
+	h.Write([]byte(s.Value))
+	return HashKey{Type: s.Type(), Value: h.Sum64()}
+}
 
 type ReturnValue struct {
 	Value Object
@@ -71,7 +97,7 @@ type Error struct {
 }
 
 func (e *Error) Type() ObjectType { return ERROR_OBJ }
-func (e *Error) Inspect() string  { return fmt.Sprintf("Message: ", e.Message) }
+func (e *Error) Inspect() string  { return fmt.Sprintf("Message: %s", e.Message) }
 
 type Array struct {
 	Elements []Object
@@ -92,6 +118,41 @@ func (a *Array) Inspect() string {
 
 	return out.String()
 }
+
+type HashPair struct {
+	Key   Object
+	Value Object
+}
+
+type Hash struct {
+	Pairs map[HashKey]HashPair
+}
+
+func (h *Hash) Type() ObjectType { return HASH_OBJ }
+func (h *Hash) Inspect() string {
+	var out bytes.Buffer
+
+	pairs := []string{}
+	for _, pair := range h.Pairs {
+		pairs = append(pairs, fmt.Sprintf("%s: %s",
+			pair.Key.Inspect(), pair.Value.Inspect()))
+	}
+
+	out.WriteString("{")
+	out.WriteString(strings.Join(pairs, ", "))
+	out.WriteString("}")
+
+	return out.String()
+}
+
+type BuiltinFunction func(args ...Object) Object
+
+type Builtin struct {
+	Fn BuiltinFunction
+}
+
+func (b *Builtin) Type() ObjectType { return BUILTIN_OBJ }
+func (b *Builtin) Inspect() string  { return "builtin function" }
 
 type Function struct {
 	Parameters []*ast.Identifier
@@ -116,12 +177,3 @@ func (fn *Function) Inspect() string {
 
 	return out.String()
 }
-
-type BuiltinFunction func(args ...Object) Object
-
-type Builtin struct {
-	Fn BuiltinFunction
-}
-
-func (b *Builtin) Type() ObjectType { return BUILTIN_OBJ }
-func (b *Builtin) Inspect() string  { return "builtin function" }
