@@ -22,6 +22,8 @@ const (
 	ARRAY_OBJ        = "array"
 	HASH_OBJ         = "hash"
 	BUILTIN_OBJ      = "builtin"
+	QUOTE_OBJ        = "quote"
+	MACRO_OBJ        = "macro"
 )
 
 var (
@@ -173,6 +175,36 @@ func (fn *Function) Inspect() string {
 	out.WriteString(strings.Join(params, ", "))
 	out.WriteString(") {\n")
 	out.WriteString(fn.Body.String())
+	out.WriteString("\n}")
+
+	return out.String()
+}
+
+type Quote struct {
+	Node ast.Node
+}
+
+func (q *Quote) Type() ObjectType { return QUOTE_OBJ }
+func (q *Quote) Inspect() string  { return fmt.Sprintf("Quote(%s)", q.Node.String()) }
+
+type Macro struct {
+	Parameters []*ast.Identifier
+	Body       *ast.BlockStatement
+	Env        *Environment
+}
+
+func (m *Macro) Type() ObjectType { return MACRO_OBJ }
+func (m *Macro) Inspect() string {
+	var out bytes.Buffer
+
+	var params []string
+	for _, parameter := range m.Parameters {
+		params = append(params, parameter.String())
+	}
+	out.WriteString("macro(")
+	out.WriteString(strings.Join(params, ", "))
+	out.WriteString(") {\n")
+	out.WriteString(m.Body.String())
 	out.WriteString("\n}")
 
 	return out.String()

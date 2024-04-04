@@ -15,7 +15,9 @@ const PROMT = ">>"
 
 func Start(in io.Reader, out io.Writer) {
 	//startLexer(in, out)
-	startParser(in, out)
+	//startParser(in, out)
+	//startEvaluator(in, out)
+	startMacro(in, out)
 }
 
 func startLexer(in io.Reader, out io.Writer) {
@@ -36,6 +38,33 @@ func startLexer(in io.Reader, out io.Writer) {
 		for tok := l.NextToken(); tok.Type != token.EOF; tok = l.NextToken() {
 			_, _ = fmt.Fprintf(out, "%+v\n", tok)
 		}
+	}
+}
+
+func startParser(in io.Reader, out io.Writer) {
+	scanner := bufio.NewScanner(in)
+
+	for {
+		_, _ = fmt.Fprintf(out, PROMT)
+		scanned := scanner.Scan()
+		if !scanned {
+			return
+		}
+		line := scanner.Text()
+		if line == "exit" {
+			return
+		}
+		l := lexer.New(line)
+		p := parser.New(l)
+		prog := p.ParseProgram()
+
+		if len(p.Errors()) != 0 {
+			printParserErrors(out, p.Errors())
+			continue
+		}
+
+		io.WriteString(out, prog.String())
+		io.WriteString(out, "\n")
 	}
 }
 
@@ -70,8 +99,10 @@ func startEvaluator(in io.Reader, out io.Writer) {
 	}
 }
 
-func startParser(in io.Reader, out io.Writer) {
+func startMacro(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
+	env := object.NewEnvironment()
+	macroEnv := object.NewEnvironment()
 
 	for {
 		_, _ = fmt.Fprintf(out, PROMT)
@@ -87,14 +118,18 @@ func startParser(in io.Reader, out io.Writer) {
 		p := parser.New(l)
 
 		prog := p.ParseProgram()
-
 		if len(p.Errors()) != 0 {
 			printParserErrors(out, p.Errors())
 			continue
 		}
 
-		io.WriteString(out, prog.String())
-		io.WriteString(out, "\n")
+		evaluator.DefineMacros(prog, macroEnv)
+		expanded := evaluator.ExpandMacros(prog, macroEnv)
+		evaluated := evaluator.Eval(expanded, env)
+		if evaluated != nil {
+			io.WriteString(out, evaluated.Inspect())
+			io.WriteString(out, "\n")
+		}
 	}
 }
 
