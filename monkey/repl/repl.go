@@ -3,11 +3,13 @@ package repl
 import (
 	"bufio"
 	"fmt"
+	"go-example/monkey/compiler"
 	"go-example/monkey/evaluator"
 	"go-example/monkey/lexer"
 	"go-example/monkey/object"
 	"go-example/monkey/parser"
 	"go-example/monkey/token"
+	"go-example/monkey/vm"
 	"io"
 )
 
@@ -17,7 +19,8 @@ func Start(in io.Reader, out io.Writer) {
 	//startLexer(in, out)
 	//startParser(in, out)
 	//startEvaluator(in, out)
-	startMacro(in, out)
+	//startMacro(in, out)
+	startVM(in, out)
 }
 
 func startLexer(in io.Reader, out io.Writer) {
@@ -130,6 +133,48 @@ func startMacro(in io.Reader, out io.Writer) {
 			io.WriteString(out, evaluated.Inspect())
 			io.WriteString(out, "\n")
 		}
+	}
+}
+
+func startVM(in io.Reader, out io.Writer) {
+	scanner := bufio.NewScanner(in)
+
+	for {
+		_, _ = fmt.Fprintf(out, PROMT)
+		scanned := scanner.Scan()
+		if !scanned {
+			return
+		}
+		line := scanner.Text()
+		if line == "exit" {
+			return
+		}
+		l := lexer.New(line)
+		p := parser.New(l)
+
+		prog := p.ParseProgram()
+		if len(p.Errors()) != 0 {
+			printParserErrors(out, p.Errors())
+			continue
+		}
+
+		comp := compiler.New()
+		err := comp.Compile(prog)
+		if err != nil {
+			fmt.Fprintf(out, "Woops! Compiler failed:\n %s\n", err)
+			continue
+		}
+
+		machine := vm.New(comp.Bytecode())
+		err = machine.Run()
+		if err != nil {
+			fmt.Fprintf(out, "Woops! Executing bytecode failed:\n %s\n", err)
+			continue
+		}
+
+		stackTop := machine.StackTop()
+		io.WriteString(out, stackTop.Inspect())
+		io.WriteString(out, "\n")
 	}
 }
 
