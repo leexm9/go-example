@@ -82,12 +82,12 @@ func (ins Instructions) String() string {
 	for i < len(ins) {
 		def, err := Lookup(ins[i])
 		if err != nil {
-			fmt.Fprintf(&out, "ERROR: %s\n", err)
+			out.WriteString(fmt.Sprintf("ERROR: %s\n", err))
 			continue
 		}
 
 		operands, read := ReadOperands(def, ins[i+1:])
-		fmt.Fprintf(&out, "%04d %s\n", i, ins.fmtInstruction(def, operands))
+		out.WriteString(fmt.Sprintf("%04d %s\n", i, ins.fmtInstruction(def, operands)))
 
 		i += 1 + read
 	}
