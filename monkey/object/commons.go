@@ -2,6 +2,11 @@ package object
 
 import "fmt"
 
+var (
+	True  = &Boolean{Value: true}
+	False = &Boolean{Value: false}
+)
+
 func NewError(format string, a ...any) *Error {
 	return &Error{Message: fmt.Sprintf(format, a...)}
 }

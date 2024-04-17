@@ -15,7 +15,7 @@ type CompilerTestCase struct {
 	expectedIns       []code.Instructions
 }
 
-func TestIntegerArithmetic(t *testing.T) {
+func TestObjectArithmetic(t *testing.T) {
 	test := []CompilerTestCase{
 		{
 			input:             "1 + 2",
@@ -24,6 +24,63 @@ func TestIntegerArithmetic(t *testing.T) {
 				code.Make(code.OpConstant, 0),
 				code.Make(code.OpConstant, 1),
 				code.Make(code.OpAdd),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			input:             "1 - 2",
+			expectedConstants: []any{1, 2},
+			expectedIns: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpSub),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			input:             "1 * 2",
+			expectedConstants: []any{1, 2},
+			expectedIns: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpMul),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			input:             "1 / 2",
+			expectedConstants: []any{1, 2},
+			expectedIns: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpDiv),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			input:             "1; 2",
+			expectedConstants: []any{1, 2},
+			expectedIns: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpPop),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			input:             "true",
+			expectedConstants: []any{},
+			expectedIns: []code.Instructions{
+				code.Make(code.OpTrue),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			input:             "false",
+			expectedConstants: []any{},
+			expectedIns: []code.Instructions{
+				code.Make(code.OpFalse),
+				code.Make(code.OpPop),
 			},
 		},
 	}
