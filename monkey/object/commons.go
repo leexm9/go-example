@@ -17,3 +17,14 @@ func IsError(obj Object) bool {
 	}
 	return false
 }
+
+func IsTruthy(obj Object) bool {
+	switch obj := obj.(type) {
+	case *Boolean:
+		return obj.Value
+	case *Null:
+		return false
+	default:
+		return true
+	}
+}

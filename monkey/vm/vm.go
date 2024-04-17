@@ -59,10 +59,21 @@ func (vm *VM) Run() error {
 			if err != nil {
 				return err
 			}
-		case code.OpAdd, code.OpSub, code.OpMul, code.OpDiv:
+		case code.OpAdd, code.OpSub, code.OpMul, code.OpDiv,
+			code.OpEqual, code.OpNotEqual, code.OpGreaterThan:
 			err := vm.executeBinaryOperation(op)
 			if err != nil {
 				return err
+			}
+		case code.OpBang:
+			err := vm.executeBangOperator()
+			if err != nil {
+				return nil
+			}
+		case code.OpMinus:
+			err := vm.executeMinusOperator()
+			if err != nil {
+				return nil
 			}
 		case code.OpPop:
 			vm.pop()
@@ -73,6 +84,22 @@ func (vm *VM) Run() error {
 			}
 		case code.OpFalse:
 			err := vm.push(object.False)
+			if err != nil {
+				return err
+			}
+		case code.OpJumpNotTruthy:
+			pos := int(code.ReadUint16(vm.instructions[ip+1:]))
+			ip += 2
+
+			condition := vm.pop()
+			if !object.IsTruthy(condition) {
+				ip = pos - 1
+			}
+		case code.OpJump:
+			pos := int(code.ReadUint16(vm.instructions[ip+1:]))
+			ip = pos - 1
+		case code.OpNull:
+			err := vm.push(object.NULL)
 			if err != nil {
 				return err
 			}
@@ -90,6 +117,8 @@ func (vm *VM) executeBinaryOperation(op code.Opcode) error {
 
 	if leftType == object.INTEGER_OBJ && rightType == object.INTEGER_OBJ {
 		return vm.executeBinaryIntegerOperation(op, left, right)
+	} else if leftType == object.BOOLEAN_OBJ && rightType == object.BOOLEAN_OBJ {
+		return vm.executeBinaryBooleanOperation(op, left, right)
 	}
 
 	return fmt.Errorf("unsupported types for binary operation: %s %s", leftType, rightType)
@@ -99,18 +128,69 @@ func (vm *VM) executeBinaryIntegerOperation(op code.Opcode, left, right object.O
 	leftVal := left.(*object.Integer).Value
 	rightVal := right.(*object.Integer).Value
 
-	var result int64
 	switch op {
 	case code.OpAdd:
-		result = leftVal + rightVal
+		return vm.push(&object.Integer{Value: leftVal + rightVal})
 	case code.OpSub:
-		result = leftVal - rightVal
+		return vm.push(&object.Integer{Value: leftVal - rightVal})
 	case code.OpMul:
-		result = leftVal * rightVal
+		return vm.push(&object.Integer{Value: leftVal * rightVal})
 	case code.OpDiv:
-		result = leftVal / rightVal
+		return vm.push(&object.Integer{Value: leftVal / rightVal})
+	case code.OpEqual:
+		return vm.push(nativeBool2Object(leftVal == rightVal))
+	case code.OpNotEqual:
+		return vm.push(nativeBool2Object(leftVal != rightVal))
+	case code.OpGreaterThan:
+		return vm.push(&object.Boolean{Value: leftVal > rightVal})
 	default:
 		return fmt.Errorf("unknown integer operator: %d", op)
 	}
-	return vm.push(&object.Integer{Value: result})
+}
+
+func (vm *VM) executeBinaryBooleanOperation(op code.Opcode, left, right object.Object) error {
+	leftVal := left.(*object.Boolean).Value
+	rightVal := right.(*object.Boolean).Value
+
+	switch op {
+	case code.OpEqual:
+		return vm.push(nativeBool2Object(leftVal == rightVal))
+	case code.OpNotEqual:
+		return vm.push(nativeBool2Object(leftVal != rightVal))
+	default:
+		return fmt.Errorf("unknown boolean operator: %d", op)
+	}
+}
+
+func (vm *VM) executeBangOperator() error {
+	operand := vm.pop()
+	switch operand {
+	case object.True:
+		return vm.push(object.False)
+	case object.False:
+		return vm.push(object.True)
+	case object.NULL:
+		return vm.push(object.True)
+	default:
+		return vm.push(object.False)
+	}
+}
+
+func (vm *VM) executeMinusOperator() error {
+	operand := vm.pop()
+
+	if operand.Type() != object.INTEGER_OBJ {
+		return fmt.Errorf("unsupport type for negation: %s", operand.Type())
+	}
+
+	value := operand.(*object.Integer).Value
+	return vm.push(&object.Integer{Value: -value})
+}
+
+func nativeBool2Object(input bool) *object.Boolean {
+	if input {
+		return object.True
+	} else {
+		return object.False
+	}
 }

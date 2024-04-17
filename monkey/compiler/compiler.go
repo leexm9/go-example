@@ -7,15 +7,26 @@ import (
 	"go-example/monkey/object"
 )
 
+type EmittedInstruction struct {
+	Opcode   code.Opcode
+	Position int
+}
+
 type Compiler struct {
 	instructions code.Instructions
 	constants    []object.Object
+
+	lastInstruction     EmittedInstruction
+	previousInstruction EmittedInstruction
 }
 
 func New() *Compiler {
 	return &Compiler{
 		instructions: code.Instructions{},
 		constants:    []object.Object{},
+
+		lastInstruction:     EmittedInstruction{},
+		previousInstruction: EmittedInstruction{},
 	}
 }
 
@@ -39,13 +50,43 @@ func (c *Compiler) addConstant(obj object.Object) int {
 func (c *Compiler) emit(op code.Opcode, operands ...int) int {
 	ins := code.Make(op, operands...)
 	pos := c.addInstruction(ins)
+
+	c.setLastInstruction(op, pos)
 	return pos
+}
+
+func (c *Compiler) setLastInstruction(op code.Opcode, pos int) {
+	previous := c.lastInstruction
+	last := EmittedInstruction{Opcode: op, Position: pos}
+	c.previousInstruction = previous
+	c.lastInstruction = last
 }
 
 func (c *Compiler) addInstruction(ins []byte) int {
 	posNewIns := len(c.instructions)
 	c.instructions = append(c.instructions, ins...)
 	return posNewIns
+}
+
+func (c *Compiler) lastInstructionIs(op code.Opcode) bool {
+	return c.lastInstruction.Opcode == op
+}
+
+func (c *Compiler) removeLastPop() {
+	c.instructions = c.instructions[:c.lastInstruction.Position]
+	c.lastInstruction = c.previousInstruction
+}
+
+func (c *Compiler) changeOperand(opPos int, operand int) {
+	op := code.Opcode(c.instructions[opPos])
+	newIns := code.Make(op, operand)
+	c.replaceInstruction(opPos, newIns)
+}
+
+func (c *Compiler) replaceInstruction(pos int, newIns []byte) {
+	for i := 0; i < len(newIns); i++ {
+		c.instructions[pos+i] = newIns[i]
+	}
 }
 
 func (c *Compiler) Compile(node ast.Node) error {
@@ -64,6 +105,18 @@ func (c *Compiler) Compile(node ast.Node) error {
 		}
 		c.emit(code.OpPop)
 	case *ast.InfixExpression:
+		if node.Operator == "<" {
+			err := c.Compile(node.Right)
+			if err != nil {
+				return err
+			}
+			err = c.Compile(node.Left)
+			if err != nil {
+				return err
+			}
+			c.emit(code.OpGreaterThan)
+			return nil
+		}
 		err := c.Compile(node.Left)
 		if err != nil {
 			return err
@@ -81,8 +134,67 @@ func (c *Compiler) Compile(node ast.Node) error {
 			c.emit(code.OpMul)
 		case "/":
 			c.emit(code.OpDiv)
+		case ">":
+			c.emit(code.OpGreaterThan)
+		case "==":
+			c.emit(code.OpEqual)
+		case "!=":
+			c.emit(code.OpNotEqual)
 		default:
 			return fmt.Errorf("unknown operator %s", node.Operator)
+		}
+	case *ast.PrefixExpression:
+		err := c.Compile(node.Right)
+		if err != nil {
+			return err
+		}
+		switch node.Operator {
+		case "-":
+			c.emit(code.OpMinus)
+		case "!":
+			c.emit(code.OpBang)
+		default:
+			return fmt.Errorf("unknown operator %s", node.Operator)
+		}
+	case *ast.IfExpression:
+		err := c.Compile(node.Condition)
+		if err != nil {
+			return err
+		}
+
+		jumpTruthyPos := c.emit(code.OpJumpNotTruthy, 0)
+		err = c.Compile(node.Consequence)
+		if err != nil {
+			return err
+		}
+		if c.lastInstructionIs(code.OpPop) {
+			c.removeLastPop()
+		}
+
+		jumpPos := c.emit(code.OpJump, 0)
+		afterConPos := len(c.instructions)
+		c.changeOperand(jumpTruthyPos, afterConPos)
+
+		if node.Alternative == nil {
+			c.emit(code.OpNull)
+		} else {
+			err = c.Compile(node.Alternative)
+			if err != nil {
+				return err
+			}
+		}
+		if c.lastInstructionIs(code.OpPop) {
+			c.removeLastPop()
+		}
+
+		afterAltPos := len(c.instructions)
+		c.changeOperand(jumpPos, afterAltPos)
+	case *ast.BlockStatement:
+		for _, stmt := range node.Statements {
+			err := c.Compile(stmt)
+			if err != nil {
+				return err
+			}
 		}
 	case *ast.IntegerLiteral:
 		intg := &object.Integer{Value: node.Value}
