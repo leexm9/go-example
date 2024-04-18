@@ -5,6 +5,7 @@ import (
 	"go-example/monkey/ast"
 	"go-example/monkey/code"
 	"go-example/monkey/object"
+	"sort"
 )
 
 type EmittedInstruction struct {
@@ -205,6 +206,43 @@ func (c *Compiler) Compile(node ast.Node) error {
 				return err
 			}
 		}
+	case *ast.ArrayLiteral:
+		for _, elem := range node.Elements {
+			err := c.Compile(elem)
+			if err != nil {
+				return err
+			}
+		}
+		c.emit(code.OpArray, len(node.Elements))
+	case *ast.HashLiteral:
+		var keys []ast.Expression
+		for k := range node.Pairs {
+			keys = append(keys, k)
+		}
+		sort.Slice(keys, func(i, j int) bool {
+			return keys[i].String() < keys[j].String()
+		})
+		for _, key := range keys {
+			err := c.Compile(key)
+			if err != nil {
+				return err
+			}
+			err = c.Compile(node.Pairs[key])
+			if err != nil {
+				return err
+			}
+		}
+		c.emit(code.OpHash, len(node.Pairs)*2)
+	case *ast.IndexExpression:
+		err := c.Compile(node.Left)
+		if err != nil {
+			return err
+		}
+		err = c.Compile(node.Index)
+		if err != nil {
+			return err
+		}
+		c.emit(code.OpIndex)
 	case *ast.Identifier:
 		symbol, ok := c.symbolTable.Resolve(node.Value)
 		if !ok {
@@ -214,6 +252,9 @@ func (c *Compiler) Compile(node ast.Node) error {
 	case *ast.IntegerLiteral:
 		intg := &object.Integer{Value: node.Value}
 		c.emit(code.OpConstant, c.addConstant(intg))
+	case *ast.StringLiteral:
+		str := &object.String{Value: node.Value}
+		c.emit(code.OpConstant, c.addConstant(str))
 	case *ast.Boolean:
 		if node.Value {
 			c.emit(code.OpTrue)

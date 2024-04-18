@@ -119,6 +119,34 @@ func (vm *VM) Run() error {
 			if err != nil {
 				return err
 			}
+		case code.OpArray:
+			numElems := int(code.ReadUint16(vm.instructions[ip+1:]))
+			ip += 2
+			array := vm.buildArray(vm.sp-numElems, vm.sp)
+			vm.sp = vm.sp - numElems
+			err := vm.push(array)
+			if err != nil {
+				return err
+			}
+		case code.OpHash:
+			numElems := int(code.ReadUint16(vm.instructions[ip+1:]))
+			ip += 2
+			hash, err := vm.buildHash(vm.sp-numElems, vm.sp)
+			if err != nil {
+				return err
+			}
+			vm.sp = vm.sp - numElems
+			err = vm.push(hash)
+			if err != nil {
+				return err
+			}
+		case code.OpIndex:
+			index := vm.pop()
+			left := vm.pop()
+			err := vm.executeIndexExpression(left, index)
+			if err != nil {
+				return nil
+			}
 		}
 	}
 	return nil
@@ -131,13 +159,16 @@ func (vm *VM) executeBinaryOperation(op code.Opcode) error {
 	leftType := left.Type()
 	rightType := right.Type()
 
-	if leftType == object.INTEGER_OBJ && rightType == object.INTEGER_OBJ {
+	switch {
+	case leftType == object.INTEGER_OBJ && rightType == object.INTEGER_OBJ:
 		return vm.executeBinaryIntegerOperation(op, left, right)
-	} else if leftType == object.BOOLEAN_OBJ && rightType == object.BOOLEAN_OBJ {
+	case leftType == object.BOOLEAN_OBJ && rightType == object.BOOLEAN_OBJ:
 		return vm.executeBinaryBooleanOperation(op, left, right)
+	case leftType == object.STRING_OBJ && rightType == object.STRING_OBJ:
+		return vm.executeBinaryStringOperation(op, left, right)
+	default:
+		return fmt.Errorf("unsupported types for binary operation: %s %s", leftType, rightType)
 	}
-
-	return fmt.Errorf("unsupported types for binary operation: %s %s", leftType, rightType)
 }
 
 func (vm *VM) executeBinaryIntegerOperation(op code.Opcode, left, right object.Object) error {
@@ -178,6 +209,18 @@ func (vm *VM) executeBinaryBooleanOperation(op code.Opcode, left, right object.O
 	}
 }
 
+func (vm *VM) executeBinaryStringOperation(op code.Opcode, left, right object.Object) error {
+	leftVal := left.(*object.String).Value
+	rightVal := right.(*object.String).Value
+
+	switch op {
+	case code.OpAdd:
+		return vm.push(&object.String{Value: leftVal + rightVal})
+	default:
+		return fmt.Errorf("unknown string operator: %d", op)
+	}
+}
+
 func (vm *VM) executeBangOperator() error {
 	operand := vm.pop()
 	switch operand {
@@ -201,6 +244,63 @@ func (vm *VM) executeMinusOperator() error {
 
 	value := operand.(*object.Integer).Value
 	return vm.push(&object.Integer{Value: -value})
+}
+
+func (vm *VM) buildArray(start, end int) object.Object {
+	elements := make([]object.Object, end-start)
+	for i := start; i < end; i++ {
+		elements[i-start] = vm.stack[i]
+	}
+	return &object.Array{Elements: elements}
+}
+
+func (vm *VM) buildHash(start, end int) (object.Object, error) {
+	pairs := make(map[object.HashKey]object.HashPair)
+	for i := start; i < end; i += 2 {
+		key := vm.stack[i]
+		value := vm.stack[i+1]
+		pair := object.HashPair{Key: key, Value: value}
+		hashKey, ok := key.(object.Hashable)
+		if !ok {
+			return nil, fmt.Errorf("unusable as hash key: %s", key.Type())
+		}
+		pairs[hashKey.HashKey()] = pair
+	}
+	return &object.Hash{Pairs: pairs}, nil
+}
+
+func (vm *VM) executeIndexExpression(left, index object.Object) error {
+	switch {
+	case left.Type() == object.ARRAY_OBJ && index.Type() == object.INTEGER_OBJ:
+		return vm.executeArrayIndex(left, index)
+	case left.Type() == object.HASH_OBJ:
+		return vm.executeHashIndex(left, index)
+	default:
+		return fmt.Errorf("index operator not supported: %s", left.Type())
+	}
+}
+
+func (vm *VM) executeArrayIndex(array, index object.Object) error {
+	arrayObj := array.(*object.Array)
+	i := index.(*object.Integer).Value
+	length := len(arrayObj.Elements) - 1
+	if i < 0 || i > int64(length) {
+		return vm.push(object.NULL)
+	}
+	return vm.push(arrayObj.Elements[i])
+}
+
+func (vm *VM) executeHashIndex(hash, index object.Object) error {
+	hashObj := hash.(*object.Hash)
+	key, ok := index.(object.Hashable)
+	if !ok {
+		return fmt.Errorf("unusable as hash key: %s", index.Type())
+	}
+	pair, ok := hashObj.Pairs[key.HashKey()]
+	if !ok {
+		return vm.push(object.NULL)
+	}
+	return vm.push(pair.Value)
 }
 
 func nativeBool2Object(input bool) *object.Boolean {
