@@ -7,11 +7,15 @@ import (
 	"go-example/monkey/object"
 )
 
-const StackSize = 2048
+const (
+	StackSize  = 2048
+	GlobalSize = 65536
+)
 
 type VM struct {
 	constants    []object.Object
 	instructions code.Instructions
+	globals      []object.Object
 
 	stack []object.Object
 	sp    int //始终指向栈中的下一个空闲槽
@@ -21,6 +25,7 @@ func New(bytecode *compiler.Bytecode) *VM {
 	return &VM{
 		constants:    bytecode.Constants,
 		instructions: bytecode.Instructions,
+		globals:      make([]object.Object, GlobalSize),
 
 		stack: make([]object.Object, StackSize),
 		sp:    0,
@@ -56,6 +61,17 @@ func (vm *VM) Run() error {
 			constIdx := code.ReadUint16(vm.instructions[ip+1:])
 			ip += 2
 			err := vm.push(vm.constants[constIdx])
+			if err != nil {
+				return err
+			}
+		case code.OpSetGlobal:
+			idx := code.ReadUint16(vm.instructions[ip+1:])
+			ip += 2
+			vm.globals[idx] = vm.pop()
+		case code.OpGetGlobal:
+			idx := code.ReadUint16(vm.instructions[ip+1:])
+			ip += 2
+			err := vm.push(vm.globals[idx])
 			if err != nil {
 				return err
 			}
@@ -193,4 +209,10 @@ func nativeBool2Object(input bool) *object.Boolean {
 	} else {
 		return object.False
 	}
+}
+
+func NewWithGlobalStore(bytecode *compiler.Bytecode, s []object.Object) *VM {
+	vm := New(bytecode)
+	vm.globals = s
+	return vm
 }

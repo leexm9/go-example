@@ -139,6 +139,10 @@ func startMacro(in io.Reader, out io.Writer) {
 func startVM(in io.Reader, out io.Writer) {
 	scanner := bufio.NewScanner(in)
 
+	var constants []object.Object
+	globals := make([]object.Object, vm.GlobalSize)
+	symbolTable := compiler.NewSymbolTable()
+
 	for {
 		_, _ = fmt.Fprintf(out, PROMT)
 		scanned := scanner.Scan()
@@ -158,14 +162,14 @@ func startVM(in io.Reader, out io.Writer) {
 			continue
 		}
 
-		comp := compiler.New()
+		comp := compiler.NewWithState(symbolTable, constants)
 		err := comp.Compile(prog)
 		if err != nil {
 			fmt.Fprintf(out, "Woops! Compiler failed:\n %s\n", err)
 			continue
 		}
 
-		machine := vm.New(comp.Bytecode())
+		machine := vm.NewWithGlobalStore(comp.Bytecode(), globals)
 		err = machine.Run()
 		if err != nil {
 			fmt.Fprintf(out, "Woops! Executing bytecode failed:\n %s\n", err)

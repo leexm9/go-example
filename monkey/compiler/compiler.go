@@ -15,6 +15,7 @@ type EmittedInstruction struct {
 type Compiler struct {
 	instructions code.Instructions
 	constants    []object.Object
+	symbolTable  *SymbolTable
 
 	lastInstruction     EmittedInstruction
 	previousInstruction EmittedInstruction
@@ -24,6 +25,7 @@ func New() *Compiler {
 	return &Compiler{
 		instructions: code.Instructions{},
 		constants:    []object.Object{},
+		symbolTable:  NewSymbolTable(),
 
 		lastInstruction:     EmittedInstruction{},
 		previousInstruction: EmittedInstruction{},
@@ -104,6 +106,13 @@ func (c *Compiler) Compile(node ast.Node) error {
 			return err
 		}
 		c.emit(code.OpPop)
+	case *ast.LetStatement:
+		err := c.Compile(node.Value)
+		if err != nil {
+			return err
+		}
+		symbol := c.symbolTable.Define(node.Name.Value)
+		c.emit(code.OpSetGlobal, symbol.Index)
 	case *ast.InfixExpression:
 		if node.Operator == "<" {
 			err := c.Compile(node.Right)
@@ -196,6 +205,12 @@ func (c *Compiler) Compile(node ast.Node) error {
 				return err
 			}
 		}
+	case *ast.Identifier:
+		symbol, ok := c.symbolTable.Resolve(node.Value)
+		if !ok {
+			return fmt.Errorf("undefined variable %s", node.Value)
+		}
+		c.emit(code.OpGetGlobal, symbol.Index)
 	case *ast.IntegerLiteral:
 		intg := &object.Integer{Value: node.Value}
 		c.emit(code.OpConstant, c.addConstant(intg))
@@ -208,4 +223,11 @@ func (c *Compiler) Compile(node ast.Node) error {
 	}
 
 	return nil
+}
+
+func NewWithState(s *SymbolTable, constants []object.Object) *Compiler {
+	compiler := New()
+	compiler.constants = constants
+	compiler.symbolTable = s
+	return compiler
 }
