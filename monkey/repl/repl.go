@@ -142,6 +142,9 @@ func startVM(in io.Reader, out io.Writer) {
 	var constants []object.Object
 	globals := make([]object.Object, vm.GlobalSize)
 	symbolTable := compiler.NewSymbolTable()
+	for i, builtin := range object.Builtins {
+		symbolTable.DefineBuiltin(i, builtin.Name)
+	}
 
 	for {
 		_, _ = fmt.Fprintf(out, PROMT)

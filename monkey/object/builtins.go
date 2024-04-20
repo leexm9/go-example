@@ -2,7 +2,7 @@ package object
 
 import "fmt"
 
-var builtins = []struct {
+var Builtins = []struct {
 	Name    string
 	Builtin *Builtin
 }{
@@ -59,7 +59,7 @@ var builtins = []struct {
 				if len(arr.Elements) > 0 {
 					return arr.Elements[0]
 				}
-				return NULL
+				return nil
 			},
 		},
 	},
@@ -79,7 +79,7 @@ var builtins = []struct {
 				if length > 0 {
 					return arr.Elements[length-1]
 				}
-				return NULL
+				return nil
 			},
 		},
 	},
@@ -101,7 +101,7 @@ var builtins = []struct {
 					copy(newElements, arr.Elements[1:length])
 					return &Array{Elements: newElements}
 				}
-				return NULL
+				return nil
 			},
 		},
 	},
@@ -121,7 +121,7 @@ var builtins = []struct {
 var BuiltinsMap = make(map[string]*Builtin)
 
 func init() {
-	for _, item := range builtins {
+	for _, item := range Builtins {
 		BuiltinsMap[item.Name] = item.Builtin
 	}
 }
