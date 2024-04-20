@@ -425,9 +425,9 @@ func TestCompilerScope(t *testing.T) {
 		t.Errorf("lastInstruction.Opcode wrong. got=%d, want=%d", last.Opcode, code.OpSub)
 	}
 
-	//if compiler.symbolTable.Outer != globalSymbolTable {
-	//	t.Errorf("compiler did not enclose symbolTable")
-	//}
+	if compiler.symbolTable.Outer != globalSymbolTable {
+		t.Errorf("compiler did not enclose symbolTable")
+	}
 
 	compiler.leaveScope()
 	if compiler.scopeIndex != 0 {
@@ -437,9 +437,9 @@ func TestCompilerScope(t *testing.T) {
 	if compiler.symbolTable != globalSymbolTable {
 		t.Errorf("compiler did not restore global symbol table")
 	}
-	//if compiler.symbolTable.Outer != nil {
-	//	t.Errorf("compiler modified global symbol table incorrectly")
-	//}
+	if compiler.symbolTable.Outer != nil {
+		t.Errorf("compiler modified global symbol table incorrectly")
+	}
 
 	compiler.emit(code.OpAdd)
 
@@ -525,6 +525,69 @@ func TestFunction(t *testing.T) {
 				code.Make(code.OpPop),
 			},
 		},
+		{
+			input: `
+					let num = 55;
+					fn() { num }
+					`,
+			expectedConstants: []any{55,
+				[]code.Instructions{
+					code.Make(code.OpGetGlobal, 0),
+					code.Make(code.OpReturnValue),
+				},
+			},
+			expectedIns: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			input: `
+					fn() { 
+						let num = 55;
+						num;
+					}
+					`,
+			expectedConstants: []any{55,
+				[]code.Instructions{
+					code.Make(code.OpConstant, 0),
+					code.Make(code.OpSetLocal, 0),
+					code.Make(code.OpGetLocal, 0),
+					code.Make(code.OpReturnValue),
+				},
+			},
+			expectedIns: []code.Instructions{
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			input: `
+					fn() { 
+						let a = 55;
+						let b = 77;
+						a + b;
+					}
+					`,
+			expectedConstants: []any{55, 77,
+				[]code.Instructions{
+					code.Make(code.OpConstant, 0),
+					code.Make(code.OpSetLocal, 0),
+					code.Make(code.OpConstant, 1),
+					code.Make(code.OpSetLocal, 1),
+					code.Make(code.OpGetLocal, 0),
+					code.Make(code.OpGetLocal, 1),
+					code.Make(code.OpAdd),
+					code.Make(code.OpReturnValue),
+				},
+			},
+			expectedIns: []code.Instructions{
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpPop),
+			},
+		},
 	}
 
 	runCompilerTests(t, tests)
@@ -544,7 +607,7 @@ func TestFunctionCall(t *testing.T) {
 			},
 			expectedIns: []code.Instructions{
 				code.Make(code.OpConstant, 1),
-				code.Make(code.OpCall),
+				code.Make(code.OpCall, 0),
 				code.Make(code.OpPop),
 			},
 		},
@@ -563,7 +626,55 @@ func TestFunctionCall(t *testing.T) {
 				code.Make(code.OpConstant, 1),
 				code.Make(code.OpSetGlobal, 0),
 				code.Make(code.OpGetGlobal, 0),
-				code.Make(code.OpCall),
+				code.Make(code.OpCall, 0),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			input: `
+					let oneArg = fn(a) { a };
+					oneArg(24)
+					`,
+			expectedConstants: []any{
+				[]code.Instructions{
+					code.Make(code.OpGetLocal, 0),
+					code.Make(code.OpReturnValue),
+				},
+				24,
+			},
+			expectedIns: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpCall, 1),
+				code.Make(code.OpPop),
+			},
+		},
+		{
+			input: `
+					let manyArg = fn(a, b, c) { a; b; c };
+					manyArg(24, 25, 26)
+					`,
+			expectedConstants: []any{
+				[]code.Instructions{
+					code.Make(code.OpGetLocal, 0),
+					code.Make(code.OpPop),
+					code.Make(code.OpGetLocal, 1),
+					code.Make(code.OpPop),
+					code.Make(code.OpGetLocal, 2),
+					code.Make(code.OpReturnValue),
+				},
+				24, 25, 26,
+			},
+			expectedIns: []code.Instructions{
+				code.Make(code.OpConstant, 0),
+				code.Make(code.OpSetGlobal, 0),
+				code.Make(code.OpGetGlobal, 0),
+				code.Make(code.OpConstant, 1),
+				code.Make(code.OpConstant, 2),
+				code.Make(code.OpConstant, 3),
+				code.Make(code.OpCall, 3),
 				code.Make(code.OpPop),
 			},
 		},

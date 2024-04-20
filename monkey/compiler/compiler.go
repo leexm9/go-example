@@ -128,12 +128,14 @@ func (c *Compiler) enterScope() {
 		previousInstruction: EmittedInstruction{},
 	}
 	c.scopes = append(c.scopes, scope)
+	c.symbolTable = NewEnclosedSymbolTable(c.symbolTable)
 	c.scopeIndex++
 }
 
 func (c *Compiler) leaveScope() code.Instructions {
 	ins := c.currentInstructions()
 	c.scopes = c.scopes[:len(c.scopes)-1]
+	c.symbolTable = c.symbolTable.Outer
 	c.scopeIndex--
 	return ins
 }
@@ -159,7 +161,11 @@ func (c *Compiler) Compile(node ast.Node) error {
 			return err
 		}
 		symbol := c.symbolTable.Define(node.Name.Value)
-		c.emit(code.OpSetGlobal, symbol.Index)
+		if symbol.Scope == GlobalScope {
+			c.emit(code.OpSetGlobal, symbol.Index)
+		} else {
+			c.emit(code.OpSetLocal, symbol.Index)
+		}
 	case *ast.InfixExpression:
 		if node.Operator == "<" {
 			err := c.Compile(node.Right)
@@ -281,6 +287,9 @@ func (c *Compiler) Compile(node ast.Node) error {
 		c.emit(code.OpHash, len(node.Pairs)*2)
 	case *ast.FunctionLiteral:
 		c.enterScope()
+		for _, param := range node.Parameters {
+			c.symbolTable.Define(param.Value)
+		}
 		err := c.Compile(node.Body)
 		if err != nil {
 			return err
@@ -293,8 +302,14 @@ func (c *Compiler) Compile(node ast.Node) error {
 			c.emit(code.OpReturn)
 		}
 
+		numLocals := c.symbolTable.numDefinitions
 		ins := c.leaveScope()
-		compiledFn := &object.CompiledFunction{Instructions: ins}
+
+		compiledFn := &object.CompiledFunction{
+			Instructions:  ins,
+			NumLocals:     numLocals,
+			NumParameters: len(node.Parameters),
+		}
 		c.emit(code.OpConstant, c.addConstant(compiledFn))
 	case *ast.ReturnStatement:
 		err := c.Compile(node.ReturnValue)
@@ -307,7 +322,13 @@ func (c *Compiler) Compile(node ast.Node) error {
 		if err != nil {
 			return err
 		}
-		c.emit(code.OpCall)
+		for _, param := range node.Arguments {
+			err = c.Compile(param)
+			if err != nil {
+				return err
+			}
+		}
+		c.emit(code.OpCall, len(node.Arguments))
 	case *ast.IndexExpression:
 		err := c.Compile(node.Left)
 		if err != nil {
@@ -323,7 +344,11 @@ func (c *Compiler) Compile(node ast.Node) error {
 		if !ok {
 			return fmt.Errorf("undefined variable %s", node.Value)
 		}
-		c.emit(code.OpGetGlobal, symbol.Index)
+		if symbol.Scope == GlobalScope {
+			c.emit(code.OpGetGlobal, symbol.Index)
+		} else {
+			c.emit(code.OpGetLocal, symbol.Index)
+		}
 	case *ast.IntegerLiteral:
 		intg := &object.Integer{Value: node.Value}
 		c.emit(code.OpConstant, c.addConstant(intg))

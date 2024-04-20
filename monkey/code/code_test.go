@@ -15,6 +15,9 @@ func TestMake(t *testing.T) {
 		{OpSub, []int{}, []byte{byte(OpSub)}},
 		{OpMul, []int{}, []byte{byte(OpMul)}},
 		{OpDiv, []int{}, []byte{byte(OpDiv)}},
+		{OpSetGlobal, []int{65534}, []byte{byte(OpSetGlobal), 255, 254}},
+		{OpSetLocal, []int{255}, []byte{byte(OpSetLocal), 255}},
+		{OpCall, []int{255}, []byte{byte(OpCall), 255}},
 	}
 
 	for _, tt := range tests {
@@ -87,6 +90,8 @@ func TestReadOperands(t *testing.T) {
 		bytesRead int
 	}{
 		{OpConstant, []int{65535}, 2},
+		{OpSetGlobal, []int{65535}, 2},
+		{OpSetLocal, []int{255}, 1},
 	}
 
 	for _, tt := range tests {
