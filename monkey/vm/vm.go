@@ -10,25 +10,36 @@ import (
 const (
 	StackSize  = 2048
 	GlobalSize = 65536
+	MaxFrames  = 1024
 )
 
 type VM struct {
-	constants    []object.Object
-	instructions code.Instructions
-	globals      []object.Object
+	constants []object.Object
+	globals   []object.Object
 
 	stack []object.Object
 	sp    int //始终指向栈中的下一个空闲槽
+
+	frames     []*Frame
+	frameIndex int
 }
 
 func New(bytecode *compiler.Bytecode) *VM {
+	mainFn := &object.CompiledFunction{Instructions: bytecode.Instructions}
+	mainFrame := NewFrame(mainFn)
+
+	frames := make([]*Frame, MaxFrames)
+	frames[0] = mainFrame
+
 	return &VM{
-		constants:    bytecode.Constants,
-		instructions: bytecode.Instructions,
-		globals:      make([]object.Object, GlobalSize),
+		constants: bytecode.Constants,
+		globals:   make([]object.Object, GlobalSize),
 
 		stack: make([]object.Object, StackSize),
 		sp:    0,
+
+		frames:     frames,
+		frameIndex: 1,
 	}
 }
 
@@ -52,25 +63,46 @@ func (vm *VM) pop() object.Object {
 	return obj
 }
 
+func (vm *VM) currentFrame() *Frame {
+	return vm.frames[vm.frameIndex-1]
+}
+
+func (vm *VM) pushFrame(f *Frame) {
+	vm.frames[vm.frameIndex] = f
+	vm.frameIndex++
+}
+
+func (vm *VM) popFrame() *Frame {
+	vm.frameIndex--
+	return vm.frames[vm.frameIndex]
+}
+
 func (vm *VM) Run() error {
-	for ip := 0; ip < len(vm.instructions); ip++ {
-		op := code.Opcode(vm.instructions[ip])
+	var ip int
+	var ins code.Instructions
+	var op code.Opcode
+
+	for vm.currentFrame().ip < len(vm.currentFrame().Instructions())-1 {
+		vm.currentFrame().ip++
+		ip = vm.currentFrame().ip
+		ins = vm.currentFrame().Instructions()
+		op = code.Opcode(ins[ip])
 
 		switch op {
 		case code.OpConstant:
-			constIdx := code.ReadUint16(vm.instructions[ip+1:])
-			ip += 2
+			constIdx := code.ReadUint16(ins[ip+1:])
+			vm.currentFrame().ip += 2
 			err := vm.push(vm.constants[constIdx])
 			if err != nil {
 				return err
 			}
 		case code.OpSetGlobal:
-			idx := code.ReadUint16(vm.instructions[ip+1:])
-			ip += 2
+			idx := code.ReadUint16(ins[ip+1:])
+			vm.currentFrame().ip += 2
 			vm.globals[idx] = vm.pop()
 		case code.OpGetGlobal:
-			idx := code.ReadUint16(vm.instructions[ip+1:])
-			ip += 2
+			idx := code.ReadUint16(ins[ip+1:])
+			vm.currentFrame().ip += 2
 			err := vm.push(vm.globals[idx])
 			if err != nil {
 				return err
@@ -104,24 +136,24 @@ func (vm *VM) Run() error {
 				return err
 			}
 		case code.OpJumpNotTruthy:
-			pos := int(code.ReadUint16(vm.instructions[ip+1:]))
-			ip += 2
+			pos := int(code.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip += 2
 
 			condition := vm.pop()
 			if !object.IsTruthy(condition) {
-				ip = pos - 1
+				vm.currentFrame().ip = pos - 1
 			}
 		case code.OpJump:
-			pos := int(code.ReadUint16(vm.instructions[ip+1:]))
-			ip = pos - 1
+			pos := int(code.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip = pos - 1
 		case code.OpNull:
 			err := vm.push(object.NULL)
 			if err != nil {
 				return err
 			}
 		case code.OpArray:
-			numElems := int(code.ReadUint16(vm.instructions[ip+1:]))
-			ip += 2
+			numElems := int(code.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip += 2
 			array := vm.buildArray(vm.sp-numElems, vm.sp)
 			vm.sp = vm.sp - numElems
 			err := vm.push(array)
@@ -129,8 +161,8 @@ func (vm *VM) Run() error {
 				return err
 			}
 		case code.OpHash:
-			numElems := int(code.ReadUint16(vm.instructions[ip+1:]))
-			ip += 2
+			numElems := int(code.ReadUint16(ins[ip+1:]))
+			vm.currentFrame().ip += 2
 			hash, err := vm.buildHash(vm.sp-numElems, vm.sp)
 			if err != nil {
 				return err
@@ -144,6 +176,28 @@ func (vm *VM) Run() error {
 			index := vm.pop()
 			left := vm.pop()
 			err := vm.executeIndexExpression(left, index)
+			if err != nil {
+				return nil
+			}
+		case code.OpCall:
+			fn, ok := vm.stack[vm.sp-1].(*object.CompiledFunction)
+			if !ok {
+				return fmt.Errorf("calling non-function")
+			}
+			frame := NewFrame(fn)
+			vm.pushFrame(frame)
+		case code.OpReturnValue:
+			retValue := vm.pop()
+			vm.popFrame()
+			vm.pop()
+			err := vm.push(retValue)
+			if err != nil {
+				return nil
+			}
+		case code.OpReturn:
+			vm.popFrame()
+			vm.pop()
+			err := vm.push(object.NULL)
 			if err != nil {
 				return nil
 			}

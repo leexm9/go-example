@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go-example/monkey/ast"
+	"go-example/monkey/code"
 	"hash/fnv"
 	"strconv"
 	"strings"
@@ -12,18 +13,19 @@ import (
 type ObjectType string
 
 const (
-	INTEGER_OBJ      = "integer"
-	BOOLEAN_OBJ      = "boolean"
-	NULL_OBJ         = "null"
-	RETURN_VALUE_OBJ = "return_value"
-	ERROR_OBJ        = "error"
-	FUNCTION_OBJ     = "function"
-	STRING_OBJ       = "string"
-	ARRAY_OBJ        = "array"
-	HASH_OBJ         = "hash"
-	BUILTIN_OBJ      = "builtin"
-	QUOTE_OBJ        = "quote"
-	MACRO_OBJ        = "macro"
+	INTEGER_OBJ           = "integer"
+	BOOLEAN_OBJ           = "boolean"
+	NULL_OBJ              = "null"
+	RETURN_VALUE_OBJ      = "return_value"
+	ERROR_OBJ             = "error"
+	FUNCTION_OBJ          = "function"
+	STRING_OBJ            = "string"
+	ARRAY_OBJ             = "array"
+	HASH_OBJ              = "hash"
+	BUILTIN_OBJ           = "builtin"
+	COMPILED_FUNCTION_OBJ = "compiled_function"
+	QUOTE_OBJ             = "quote"
+	MACRO_OBJ             = "macro"
 )
 
 var (
@@ -178,6 +180,15 @@ func (fn *Function) Inspect() string {
 	out.WriteString("\n}")
 
 	return out.String()
+}
+
+type CompiledFunction struct {
+	Instructions code.Instructions
+}
+
+func (cf *CompiledFunction) Type() ObjectType { return COMPILED_FUNCTION_OBJ }
+func (cf *CompiledFunction) Inspect() string {
+	return fmt.Sprintf("CompiledFunction[%p]", cf)
 }
 
 type Quote struct {
