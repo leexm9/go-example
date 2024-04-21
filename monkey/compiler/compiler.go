@@ -153,6 +153,8 @@ func (c *Compiler) loadSymbol(s Symbol) {
 		c.emit(code.OpGetLocal, s.Index)
 	case BuiltinScope:
 		c.emit(code.OpGetBuiltin, s.Index)
+	case FreeScope:
+		c.emit(code.OpGetFree, s.Index)
 	}
 }
 
@@ -318,15 +320,21 @@ func (c *Compiler) Compile(node ast.Node) error {
 			c.emit(code.OpReturn)
 		}
 
+		freeSymbols := c.symbolTable.FreeSymbols
 		numLocals := c.symbolTable.numDefinitions
 		ins := c.leaveScope()
+
+		for _, s := range freeSymbols {
+			c.loadSymbol(s)
+		}
 
 		compiledFn := &object.CompiledFunction{
 			Instructions:  ins,
 			NumLocals:     numLocals,
 			NumParameters: len(node.Parameters),
 		}
-		c.emit(code.OpConstant, c.addConstant(compiledFn))
+		fnIdx := c.addConstant(compiledFn)
+		c.emit(code.OpClosure, fnIdx, len(freeSymbols))
 	case *ast.ReturnStatement:
 		err := c.Compile(node.ReturnValue)
 		if err != nil {
